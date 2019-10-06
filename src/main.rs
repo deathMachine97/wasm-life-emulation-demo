@@ -48,7 +48,8 @@ pub struct Organizm {
 pub struct Universe {
 	height: u32,
 	width: u32,
-	cells: Vec<Cell>
+	cells: Vec<Cell>,
+	creature_count: u32
 }
 
 fn get_coordinate(width: u32,index: usize) -> Position{
@@ -111,7 +112,7 @@ impl Universe {
 	}
 
 	pub fn new(height: u32, width: u32) -> Universe{
-		let cells = (0..width*height).map(|i|{
+		let cells:Vec<Cell> = (0..width*height).map(|i|{
 			let index = i.clone() as usize;
 			let position = get_coordinate(width, index);
 			if i%2 == 0 || i%7 == 0{
@@ -136,10 +137,12 @@ impl Universe {
 				(new_object)
 			}
 		}).collect();
+		let creature_count = *&cells.len() as u32;
 		Universe {
 			width,
 			height,
 			cells,
+			creature_count
 		}
 	}
 
@@ -148,7 +151,7 @@ impl Universe {
 		let cell_index = self.get_index(new_creature.position.row,new_creature.position.column);
 		let position = get_coordinate(self.width, cell_index);
 		next[cell_index] = Cell{
-			id: next.len() as u32,
+			id: self.creature_count+1,
 			position,
 			creature: new_creature.creature,
 			stamina: new_creature.stamina,
@@ -162,6 +165,7 @@ impl Universe {
 		};
 		// println!("{:?}",next[cell_index]);
 		self.cells = next;
+		self.creature_count+=1;
 	}
 }
 
@@ -173,7 +177,7 @@ impl fmt::Display for Universe {
 				// let symbol = if cell.creature == Creature::Empty { '◻' } else { '◼' };
 				let symbol =
 				if cell.creature == Creature::Empty { '*' }
-				else if cell.creature == Creature::Grass { '*' }
+				else if cell.creature == Creature::Grass { '#' }
 				else if cell.creature == Creature::Sheep { 'S' }
 				else if cell.creature == Creature::Wolf { 'W' }
 				else { ' ' };
@@ -187,48 +191,59 @@ impl fmt::Display for Universe {
 
 // Движение
 impl Universe{
-	fn start_movements(&self){
+	pub fn start_movements(&mut self){
+		let mut next = self.cells.clone();
 		for cell in self.cells.iter(){
 			if cell.status == Life::Alive{
+				println!("{:?}",&cell);
 				let cell_index = self.get_index_with_id(cell.id);
 				match cell_index {
 					Some(index) => {
-						let eated_cell = match cell.inside {
-							Some(e_cell) => Inside{
-								id: cell.inside.id,
-								creature: e_cell.inside.creature,
-								position: e_cell.inside.position,
-								stamina: e_cell.inside.stamina,
-								status: e_cell.inside.status
+						let _have_been_eaten_cell = match cell.inside {
+							Some(e_cell) => Cell{
+								id: e_cell.id,
+								creature: e_cell.creature,
+								position: e_cell.position,
+								stamina: e_cell.stamina,
+								status: e_cell.status,
+								inside: None
 							},
-							None => Inside{
-								id: index,
+							None => Cell{
+								id: index as u32,
 								creature: Creature::Empty,
 								position: cell.position,
 								stamina: 0,
-								status: Life::Dead
+								status: Life::Dead,
+								inside: None
+
 							}
 						};
-						let will_eated_cell = 0;
+						let _new_index = (index+1) % self.cells.len();
+						let _will_eatten_cell = Inside{
+							id: self.cells[_new_index].id,
+							creature: self.cells[_new_index].creature,
+							position: self.cells[_new_index].position,
+							stamina: self.cells[_new_index].stamina,
+							status: self.cells[_new_index].status,
+						};
+						let creature_in_new_place = Cell{
+							id: self.cells[index].id,
+							creature: self.cells[index].creature,
+							position: self.cells[_new_index].position,
+							stamina: self.cells[index].stamina,
+							status: self.cells[index].status,
+							inside: Some(_will_eatten_cell),
+						};
+						// println!("index:{:?}	_new_index:{:?}",&index,&_new_index);
+						next[index] = _have_been_eaten_cell;
+						next[_new_index] = creature_in_new_place;
 						()
 					},
 					None => (),
 				}
 			}
-			//
-			// let object_id = object_id as u32;
-			// let cell_index: Option<usize> = self.get_index_with_id(object_id);
-			// match cell_index {
-			// 	Some(index)=> {
-			// 		let cell:Cell = self.cells[index];
-			// 		println!("{:?}",cell );
-			// 		if cell.creature == Creature::Sheep || cell.creature == Creature::Wolf{
-			// 			println!("{:?}", cell);
-			// 		}
-			// 	},
-			// 	None => ()
-			// };
 		}
+		self.cells = next;
 	}
 }
 
@@ -254,5 +269,15 @@ fn main() {
 	};
 	universe_1.set(sheep_1);
 	println!("{}",universe_1);
+
 	universe_1.start_movements();
+	// println!("{}",universe_1);
+	universe_1.start_movements();
+	// println!("{}",universe_1);
+	universe_1.start_movements();
+	// println!("{}",universe_1);
+	universe_1.start_movements();
+	// println!("{}",universe_1);
+	universe_1.start_movements();
+	println!("{}",universe_1);
 }
