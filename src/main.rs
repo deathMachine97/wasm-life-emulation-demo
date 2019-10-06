@@ -189,12 +189,58 @@ impl fmt::Display for Universe {
 	}
 }
 
+impl Cell {
+	pub fn kill_cell(&mut self){
+		*self = match self.inside {
+			Some(inside_cell) => {
+				Cell{
+					id: inside_cell.id,
+					creature: inside_cell.creature,
+					position: self.position,
+					stamina: inside_cell.stamina + self.stamina,
+					status: Life::Dead,
+					inside: None
+				}
+			}
+			None => {
+				Cell{
+					id: self.id,
+					creature: Creature::Grass,
+					position: self.position,
+					stamina: self.stamina,
+					status: Life::Dead,
+					inside: None
+				}
+			}
+		};
+	}
+
+
+	pub fn check_for_kill(&mut self){
+		if self.stamina > 0 {
+			self.kill_cell();
+		}
+	}
+
+	pub fn feed(&mut self){
+		match  self.inside {
+			Some(mut inside) =>{
+				if inside.stamina > 0 {
+					self.stamina += 1;
+					inside.stamina -= 1;
+				}
+			},
+			None=>()
+		}
+	}
+}
+
 // Движение
 impl Universe{
-	pub fn start_movements(&mut self){
+	fn make_movement(&mut self){
 		let mut next = self.cells.clone();
 		for cell in self.cells.iter(){
-			if cell.status == Life::Alive{
+			if cell.status == Life::Alive && cell.stamina > 1{
 				println!("{:?}",&cell);
 				let cell_index = self.get_index_with_id(cell.id);
 				match cell_index {
@@ -230,7 +276,7 @@ impl Universe{
 							id: self.cells[index].id,
 							creature: self.cells[index].creature,
 							position: self.cells[_new_index].position,
-							stamina: self.cells[index].stamina,
+							stamina: self.cells[index].stamina - 1,
 							status: self.cells[index].status,
 							inside: Some(_will_eatten_cell),
 						};
@@ -245,39 +291,40 @@ impl Universe{
 		}
 		self.cells = next;
 	}
+
+	pub fn tick(&mut self){
+		let mut next = self.cells.clone();
+		for cell in self.cells.iter() {
+			if cell.status == Life::Alive{
+				match self.get_index_with_id(cell.id){
+					Some(cell_index) => {
+						next[cell_index].check_for_kill();
+						next[cell_index].stamina-= 1;
+						next[cell_index].feed();
+						next[cell_index].check_for_kill();
+					}
+					None => ()
+				}
+
+
+			}
+		}
+		self.make_movement();
+	}
 }
 
-
-// impl Universe {
-// 	pub fn tick(&self){
-// 		let mut next = &self.cells;
-// 		for row in 0..self.height{
-// 			for col in 0..self.width{
-//
-// 			}
-// 		}
-// 	}
-// }
 
 fn main() {
 	let mut universe_1 = Universe::new(5,5);
 	let sheep_1 = Organizm{
 		position: Position{column:1,row:0},
 		creature: Creature::Sheep,
-		stamina: 20,
+		stamina: 255,
 		status: Life::Alive
 	};
 	universe_1.set(sheep_1);
-	println!("{}",universe_1);
-
-	universe_1.start_movements();
-	// println!("{}",universe_1);
-	universe_1.start_movements();
-	// println!("{}",universe_1);
-	universe_1.start_movements();
-	// println!("{}",universe_1);
-	universe_1.start_movements();
-	// println!("{}",universe_1);
-	universe_1.start_movements();
-	println!("{}",universe_1);
+	loop {
+		println!("{} \n\n",universe_1);
+		universe_1.make_movement();
+	}
 }
