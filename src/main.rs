@@ -120,7 +120,7 @@ impl Universe {
 					id: i,
 					position,
 					creature: Creature::Grass,
-					stamina: 0,
+					stamina: 40,
 					status: Life::Dead,
 					inside: None
 				};
@@ -226,8 +226,23 @@ impl Cell {
 		match  self.inside {
 			Some(mut inside) =>{
 				if inside.stamina > 0 {
-					self.stamina += 1;
-					inside.stamina -= 1;
+					match inside.stamina.cmp(&5){
+						Ordering::Less => {
+							self.stamina += 1;
+							inside.stamina -= 1;
+							self.inside = Some(inside);
+						},
+						Ordering::Greater => {
+							self.stamina += 6;
+							inside.stamina -= 6;
+							self.inside = Some(inside);
+						},
+						Ordering::Equal => {
+							self.stamina += 5;
+							inside.stamina -= 5;
+							self.inside = Some(inside);
+						}
+					};
 				}
 			},
 			None=>()
@@ -320,16 +335,17 @@ impl Universe{
 fn main() {
 	let mut universe_1 = Universe::new(5,5);
 	let sheep_1 = Organizm{
-		position: Position{column:1,row:0},
+		position: Position{column:0,row:0},
 		creature: Creature::Sheep,
 		stamina: 10,
 		status: Life::Alive
 	};
 	universe_1.set(sheep_1);
 	universe_1.tick();
-
+	universe_1.tick();
+	universe_1.tick();
 	println!("{}", universe_1);
-
+	println!("{:?}", universe_1.cells[0]);
 	// loop {
 	// 	println!("{} \n\n",universe_1);
 	// 	universe_1.make_movement();
