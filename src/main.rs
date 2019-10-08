@@ -1,3 +1,6 @@
+// Добавить параметр calories для cell
+// Добавить параметр health для cell
+//
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Creature {
 	Empty = 0,
@@ -18,16 +21,18 @@ pub enum Life {
 	Alive = 1,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Inside {
 	id:u32,
 	creature: Creature,
 	position: Position,
 	stamina:u8,
 	status: Life,
+	calories: f32,
+	health: u8
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cell {
 	id:u32,
 	creature: Creature,
@@ -35,7 +40,9 @@ pub struct Cell {
 	stamina:u8,
 	status: Life,
 	inside: Option<Inside>,
-	direction: Direction
+	calories: f32,
+	direction: Direction,
+	health: u8
 }
 
 #[derive(Debug)]
@@ -43,7 +50,9 @@ pub struct Organizm {
 	position: Position,
 	creature: Creature,
 	stamina:u8,
-	status: Life
+	status: Life,
+	calories: f32,
+	health: u8
 }
 
 pub struct Universe {
@@ -66,8 +75,35 @@ enum Direction {
 	NorthWest,
 }
 
+impl Creature {
+	fn get_digestion_rate(&self) -> f32{
+		match &self {
+			Creature::Wolf => {2.0},
+			Creature::Sheep => {0.5},
+			_otherwisee => 0.0
+		}
+	}
+
+	fn get_eating_food_type(&self) -> Creature{
+		match self {
+			Creature::Sheep => Creature::Grass,
+			Creature::Wolf => Creature::Sheep,
+			_otherwisee => Creature::Empty
+		}
+	}
+
+	fn rot(&self) -> f32{
+		match self {
+			Creature::Sheep => 15.0,
+			Creature::Wolf => 10.0,
+			Creature::Grass => 0.0,
+			Creature::Empty => 0.0
+		}
+	}
+}
+
 impl Direction {
-	fn get_direction(&self) -> (i32,i32){
+	fn get_direction_coordinate(&self) -> (i32,i32){
 		match self {
 			Direction::Stand => (0,0),
 			Direction::North => (0,-1),
@@ -153,7 +189,9 @@ impl Universe {
 					stamina: 40,
 					status: Life::Dead,
 					inside: None,
-					direction: Direction::Stand
+					direction: Direction::Stand,
+					calories: 10.0,
+					health: 0
 				};
 				(new_object)
 			}else{
@@ -164,7 +202,9 @@ impl Universe {
 					stamina: 0,
 					status: Life::Dead,
 					inside: None,
-					direction: Direction::Stand
+					direction: Direction::Stand,
+					calories: 0.0,
+					health: 0
 				};
 				(new_object)
 			}
@@ -193,8 +233,13 @@ impl Universe {
 				position,
 				creature: next[cell_index].creature,
 				stamina: next[cell_index].stamina,
-				status: next[cell_index].status,}),
-			direction: Direction::Stand
+				status: next[cell_index].status,
+				calories: next[cell_index].calories,
+				health: 0
+			}),
+			direction: Direction::Stand,
+			calories: new_creature.calories,
+			health: new_creature.health
 		};
 		// println!("{:?}",next[cell_index]);
 		self.cells = next;
@@ -209,7 +254,7 @@ impl fmt::Display for Universe {
 			for &cell in line {
 				// let symbol = if cell.creature == Creature::Empty { '◻' } else { '◼' };
 				let symbol =
-				if cell.creature == Creature::Empty { '*' }
+				if cell.creature == Creature::Empty { '.' }
 				else if cell.creature == Creature::Grass { '#' }
 				else if cell.creature == Creature::Sheep { 'S' }
 				else if cell.creature == Creature::Wolf { 'W' }
@@ -230,10 +275,12 @@ impl Cell {
 					id: inside_cell.id,
 					creature: inside_cell.creature,
 					position: self.position,
-					stamina: inside_cell.stamina + self.stamina,
+					stamina: 0,
 					status: Life::Dead,
 					inside: None,
-					direction: Direction::Stand
+					direction: Direction::Stand,
+					calories: inside_cell.calories + self.creature.rot(),
+					health: 0
 				}
 			}
 			None => {
@@ -241,53 +288,149 @@ impl Cell {
 					id: self.id,
 					creature: Creature::Grass,
 					position: self.position,
-					stamina: self.stamina,
+					stamina: 0,
 					status: Life::Dead,
 					inside: None,
-					direction: Direction::Stand
+					direction: Direction::Stand,
+					calories: self.creature.rot(),
+					health: 0
 				}
 			}
 		};
 	}
 
+	fn heal(&mut self,heal_size:u8){
+		if self.calories > ((heal_size as f32) / 1.5) + 1.0 {
+			self.health = self.health + heal_size*2;
+			self.calories = self.calories - (heal_size as f32) / 1.5;
+		}
+	}
 
-	fn check_for_kill(&mut self){
-		if self.stamina == 0 {
+	fn take_damage(&mut self, damage_size:u8){
+		if self.health > damage_size{
+			self.health = self.health - damage_size;
+		}
+		else{
+			self.health = 0;
+		}
+
+	}
+
+	fn increase_stamina(&mut self, stamina_size: u8){
+		self.stamina = self.stamina + stamina_size;
+		self.calories = self.calories - stamina_size as f32;
+	}
+
+	fn balance_energy(&mut self){
+		self.feed();
+		if self.stamina <= 1 && self.calories > 1.0{
+			self.increase_stamina(1);
+		}
+
+		if self.health < 100 && self.calories > 2.0 {
+			if 100 - self.health >= 10{
+				self.heal(5);
+			}else{
+				self.heal(1);
+			}
+		}
+
+		if self.calories <= 0.0 {
+			self.calories = 0.0;
+			self.take_damage(10)
+		}
+
+		if self.health == 0{
 			self.kill_cell();
 		}
+
 	}
 
 	fn feed(&mut self){
 		match  self.inside {
 			Some(mut inside) =>{
-				if inside.stamina > 0 {
-					match inside.stamina.cmp(&5){
-						Ordering::Less => {
-							self.stamina += 1;
-							inside.stamina -= 1;
-							self.inside = Some(inside);
-						},
-						Ordering::Greater => {
-							self.stamina += 6;
-							inside.stamina -= 6;
-							self.inside = Some(inside);
-						},
-						Ordering::Equal => {
-							self.stamina += 5;
-							inside.stamina -= 5;
-							self.inside = Some(inside);
+				let mut next = self.clone();
+				if inside.creature == self.creature.get_eating_food_type(){
+					if inside.calories > 0.0 {
+						let digestion_rate = if inside.calories < next.creature.get_digestion_rate(){inside.calories} else {next.creature.get_digestion_rate()};
+						if inside.calories - digestion_rate > 0.0{
+							next.calories = next.calories + digestion_rate;
+							inside.calories = inside.calories - digestion_rate;
+						}else{
+							next.calories = next.calories + inside.calories;
+							inside.calories = 0.0;
 						}
-					};
+
+					}
+
+					if inside.calories <= 0.0{
+						next.inside = None;
+					}else{
+						next.inside = Some(inside);
+					}
+
+					*self = next;
 				}
 			},
 			None=>()
 		}
 	}
 
-	fn starve(&mut self){
-		self.check_for_kill();
-		self.stamina -= 1;
-		self.check_for_kill();
+	fn pack_to_inside(&self)->Option<Inside>{
+		Some(Inside{
+			id: self.id,
+			creature: self.creature,
+			position: self.position,
+			stamina:self.stamina,
+			status: self.status,
+			calories: self.calories,
+			health: 0
+		})
+	}
+
+	fn get_inside_cell(&self)->Option<Inside>{
+		let inside: Option<Inside> = match self.inside {
+			Some(inside)=>{
+				Some(Inside{
+					id:inside.id,
+					creature: inside.creature,
+					position: inside.position,
+					stamina:inside.stamina,
+					status: inside.status,
+					calories: inside.calories,
+					health: inside.health
+				})
+			},
+			None=> None
+		};
+		inside
+	}
+
+	fn spin_the_inside(&self,spinned_cell_index:usize,spinned_cell_position:Position)->Cell{
+		match self.inside{
+			Some(e_cell) => Cell{
+				id: e_cell.id,
+				creature: e_cell.creature,
+				position: e_cell.position,
+				stamina: e_cell.stamina,
+				status: e_cell.status,
+				inside: None,
+				direction: Direction::Stand,
+				calories: e_cell.calories,
+				health: 0
+			},
+			None => Cell{
+				id: spinned_cell_index as u32,
+				creature: Creature::Empty,
+				position: spinned_cell_position,
+				stamina: 0,
+				status: Life::Dead,
+				inside: None,
+				direction: Direction::Stand,
+				calories: 0.0,
+				health: 0
+			}
+		}
 	}
 }
 
@@ -312,50 +455,20 @@ impl Universe{
 	fn make_movement(&mut self){
 		let mut next = self.cells.clone();
 		for cell in self.cells.iter(){
-			if cell.status == Life::Alive && cell.stamina > 1{
+			if cell.status == Life::Alive && cell.stamina >= 1{
 				let cell_index = self.get_index_with_id(cell.id);
 				match cell_index {
-					Some(index) => {
-						let have_been_eaten_cell = match cell.inside {
-							Some(e_cell) => Cell{
-								id: e_cell.id,
-								creature: e_cell.creature,
-								position: e_cell.position,
-								stamina: e_cell.stamina,
-								status: e_cell.status,
-								inside: None,
-								direction: Direction::Stand
-							},
-							None => Cell{
-								id: index as u32,
-								creature: Creature::Empty,
-								position: cell.position,
-								stamina: 0,
-								status: Life::Dead,
-								inside: None,
-								direction: Direction::Stand
-							}
-						};
-						let direction = Direction::North.get_direction();
-						let new_index: usize = self.get_new_index_with_direction(index, direction);
-						// let new_index = (index+1) % self.cells.len();
-						let will_eatten_cell = Inside{
-							id: self.cells[new_index].id,
-							creature: self.cells[new_index].creature,
-							position: self.cells[new_index].position,
-							stamina: self.cells[new_index].stamina,
-							status: self.cells[new_index].status,
-						};
-						let creature_in_new_place = Cell{
-							id: self.cells[index].id,
-							creature: self.cells[index].creature,
-							position: self.cells[new_index].position,
-							stamina: self.cells[index].stamina - 1,
-							status: self.cells[index].status,
-							inside: Some(will_eatten_cell),
-							direction: Direction::Stand
-						};
-						next[index] = have_been_eaten_cell;
+					Some(old_index) => {
+						let chosen_direction:Direction = Direction::NorthWest;
+						let direction: (i32,i32) = chosen_direction.get_direction_coordinate();
+						let new_index: usize = self.get_new_index_with_direction(old_index, direction);
+						let inside_in_new_place: Option<Inside> =
+							if chosen_direction == Direction::Stand {	self.cells[old_index].get_inside_cell()	}
+							else {	self.cells[new_index].pack_to_inside()	};
+						let minus_stamina = if chosen_direction == Direction::Stand {0} else {1};
+						let creature_in_new_place = self.create_cell_for_new_position(new_index,old_index, inside_in_new_place,minus_stamina);
+						let inside_in_old_place: Cell = cell.spin_the_inside(old_index,cell.position);
+						next[old_index] = inside_in_old_place;
 						next[new_index] = creature_in_new_place;
 						()
 					},
@@ -366,14 +479,27 @@ impl Universe{
 		self.cells = next;
 	}
 
+	fn create_cell_for_new_position(&self, new_index: usize,old_index: usize, inside_in_new_place: Option<Inside>,minus_stamina:u8) -> Cell{
+		Cell{
+			id: self.cells[old_index].id,
+			creature: self.cells[old_index].creature,
+			position: self.cells[new_index].position,
+			stamina: self.cells[old_index].stamina - minus_stamina,
+			status: self.cells[old_index].status,
+			inside: inside_in_new_place,
+			direction: Direction::Stand,
+			calories: self.cells[old_index].calories,
+			health: self.cells[old_index].health
+		}
+	}
+
 	pub fn tick(&mut self){
 		let mut next = self.cells.clone();
 		for cell in self.cells.iter() {
 			if cell.status == Life::Alive{
 				match self.get_index_with_id(cell.id){
 					Some(cell_index) => {
-						next[cell_index].starve();
-						next[cell_index].feed();
+						next[cell_index].balance_energy();
 					}
 					None => ()
 				}
@@ -382,25 +508,39 @@ impl Universe{
 		self.cells = next;
 		self.make_movement();
 	}
+
+	fn analyze_creatures(&self,creature_type:Creature){
+		for cell in self.cells.iter() {
+			if cell.creature == creature_type{
+				match self.get_index_with_id(cell.id){
+					Some(index) => {
+						println!("creature: {:?}\ncreature_id: {:?}\nstamina: {:?}\nstatus: {:?}\ncalories: {:?}\nhealth: {:?}\n\n", self.cells[index].creature,self.cells[index].id,self.cells[index].stamina,self.cells[index].status, self.cells[index].calories, self.cells[index].health);
+						println!("{:?}",self.cells[index]);
+					}
+					None => ()
+				}
+			}
+		}
+	}
 }
 
 
 fn main() {
-	let mut universe_1 = Universe::new(5,5);
+	let mut universe_1 = Universe::new(5,6);
 	let sheep_1 = Organizm{
 		position: Position{column:0,row:0},
 		creature: Creature::Sheep,
 		stamina: 10,
-		status: Life::Alive
+		status: Life::Alive,
+		calories: 20.0,
+		health: 100
 	};
 	universe_1.set(sheep_1);
-	universe_1.tick();
-	universe_1.tick();
-	universe_1.tick();
-	universe_1.tick();
-	// universe_1.tick();
-	println!("{}", universe_1);
-	// println!("{:?}", universe_1.cells[0]);
+	for _ in 0..61 {
+		universe_1.tick();
+		println!("{}",universe_1 );
+	}
 
-	// universe_1.get_new_index_with_direction(0, Direction::North.get_direction());
+	universe_1.analyze_creatures(Creature::Sheep);
+	// universe_1.get_new_index_with_direction(0, Direction::North.get_direction_coordinate());
 }
